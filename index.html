@@ -1,35 +1,38 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <title>Pat the Alien – Risk Game</title>
-  <style>
-    body { font-family: Arial; text-align: center; margin-top: 40px; }
-    button { padding: 15px; margin: 10px; font-size: 16px; }
-  </style>
+  <title>Pat the Alien Risk Game</title>
 </head>
-
 <body>
 
-<h2>Pat the Alien – Risk Game</h2>
+<h2>Pat the Alien – Estimate Your Risk Aversion</h2>
 
 <div id="game"></div>
 
 <script>
-const backendURL = "https://script.google.com/macros/s/AKfycbwcyaPryTJsFxEazyYQAFXl77exTN1ViuncrymbyplTvNALTtvlQUHyO3oxOhuyqQuY/exec";
+const backendURL = "https://script.google.com/macros/s/AKfycbyZaMaPolnhTyt5xLKyNybqurfchxlje5xoQEye1vXMM3BIZpw1zj98NwDUpLJPBpuc/exec";
 const id = Math.random().toString(36).substring(2, 10);
-let gameNumber = 1;
 let studentName = "";
 
-const games = [
-  { name: "Game 1 (Low Risk)", p: 0.10 },
-  { name: "Game 2 (High Risk)", p: 0.30 }
+let sigmaLow = 0;
+let sigmaHigh = 20;
+let sigmaEstimate = null;
+let questionNumber = 0;
+
+const questions = [
+  // Question 1: identify risk averse or not
+  {safe: [10, 10], risky: [20, 0], p: 0.5},
+  // Following questions use bisection
+  {safe: null, risky: null, p: 0.5}, 
+  {safe: null, risky: null, p: 0.5}, 
+  {safe: null, risky: null, p: 0.5}, 
+  {safe: null, risky: null, p: 0.5} 
 ];
 
 function askName() {
   document.getElementById("game").innerHTML = `
-    <p>Enter your name (or initials):</p>
-    <input type="text" id="nameInput" />
+    <p>Enter your name or initials:</p>
+    <input type="text" id="nameInput"/>
     <br><br>
     <button onclick="saveName()">Start</button>
   `;
@@ -37,63 +40,79 @@ function askName() {
 
 function saveName() {
   const input = document.getElementById("nameInput").value.trim();
-  if (input === "") {
-    alert("Please enter a name or initials.");
-    return;
-  }
+  if(input === "") { alert("Please enter a name"); return; }
   studentName = input;
-  showGame();
+  nextQuestion();
 }
 
-function showGame() {
-  if (gameNumber > games.length) {
-    document.getElementById("game").innerHTML =
-      "<h3>Thanks! You are done.</h3>";
+function nextQuestion() {
+  questionNumber++;
+  if(questionNumber > questions.length || sigmaEstimate !== null) {
+    recordSigma();
+    document.getElementById("game").innerHTML = `<h3>Thanks! Your estimated σ = ${sigmaEstimate.toFixed(2)}</h3>`;
     return;
   }
 
-  const g = games[gameNumber - 1];
-
-  document.getElementById("game").innerHTML = `
-    <h3>${g.name}</h3>
-    <p>Risky option: ${g.p*100}% chance of presentation</p>
-    <button onclick="play('Safe')">Safe Country</button>
-    <button onclick="play('Risky')">Risky Country</button>
-  `;
+  // For question 1
+  let q = questions[questionNumber-1];
+  if(questionNumber === 1){
+    document.getElementById("game").innerHTML = `
+      <p><b>Question 1:</b> Choose the country you prefer</p>
+      <p>Country A: 50% chance 10, 50% chance 10 (Safe)</p>
+      <p>Country B: 50% chance 20, 50% chance 0 (Risky)</p>
+      <button onclick="choose('A')">Country A</button>
+      <button onclick="choose('B')">Country B</button>
+    `;
+  } else {
+    // Use bisection: compute midpoint of interval
+    const mid = (sigmaLow + sigmaHigh)/2;
+    // safe and risky options: safe = mid points
+    q.safe = [10 + mid/2, 10 - mid/2];
+    q.risky = [10 + mid, 10 - mid];
+    document.getElementById("game").innerHTML = `
+      <p><b>Question ${questionNumber}:</b> Choose the country you prefer</p>
+      <p>Country A: 50% chance ${q.safe[0]}, 50% chance ${q.safe[1]} (Safe)</p>
+      <p>Country B: 50% chance ${q.risky[0]}, 50% chance ${q.risky[1]} (Risky)</p>
+      <button onclick="choose('A')">Country A</button>
+      <button onclick="choose('B')">Country B</button>
+    `;
+  }
 }
 
-function play(choice) {
-  const g = games[gameNumber - 1];
-  let outcome = "Safe";
+function choose(option) {
+  if(questionNumber === 1){
+    if(option === 'B'){
+      sigmaEstimate = 0; // Not risk averse
+    } else {
+      sigmaLow = 0; sigmaHigh = 20; // Continue bisection
+    }
+  } else {
+    // Bisection update
+    const mid = (sigmaLow + sigmaHigh)/2;
+    if(option === 'A') sigmaLow = mid; // prefers safe → more risk averse
+    else sigmaHigh = mid; // prefers risky → less risk averse
 
-  if (choice === "Risky" && Math.random() < g.p) {
-    outcome = "Presentation";
+    // Stop if interval small enough or last question
+    if(questionNumber === questions.length) sigmaEstimate = (sigmaLow + sigmaHigh)/2;
   }
 
+  nextQuestion();
+}
+
+function recordSigma() {
   fetch(backendURL, {
     method: "POST",
     body: JSON.stringify({
       name: studentName,
       id: id,
-      game: gameNumber,
-      choice: choice,
-      outcome: outcome
+      sigma: sigmaEstimate
     })
   });
-
-  document.getElementById("game").innerHTML =
-    `<p><b>Outcome:</b> ${outcome}</p>
-     <button onclick="next()">Next</button>`;
 }
 
-function next() {
-  gameNumber++;
-  showGame();
-}
-
+// Start
 askName();
+
 </script>
-
 </body>
-
 </html>
