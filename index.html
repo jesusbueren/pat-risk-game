@@ -1,29 +1,31 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>The Risk Test</title>
+  <title>Pat the Alien – Risk Game</title>
   <style>
-    body { font-family: sans-serif; max-width: 600px; margin: 40px auto; text-align: center; line-height: 1.6; background-color: #f4f7f6; color: #333; }
-    .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-    .card { border: 2px solid #007bff; border-radius: 10px; padding: 20px; margin: 15px 0; cursor: pointer; transition: 0.2s; }
-    .card:hover { background-color: #e7f3ff; transform: translateY(-2px); }
-    button { background: #007bff; color: white; border: none; padding: 12px 24px; border-radius: 5px; cursor: pointer; font-size: 16px; }
-    input { padding: 10px; width: 80%; margin-bottom: 20px; border: 1px solid #ccc; border-radius: 5px; }
-    .progress { height: 8px; background: #eee; border-radius: 4px; margin-bottom: 20px; overflow: hidden; }
-    .progress-fill { height: 100%; background: #007bff; width: 0%; transition: 0.3s; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 40px auto; text-align: center; line-height: 1.6; background-color: #f0f4f8; color: #2d3748; }
+    .container { background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border: 2px solid #e2e8f0; }
+    .card { border: 2px solid #4a90e2; border-radius: 12px; padding: 25px; margin: 20px 0; cursor: pointer; transition: 0.3s; background: #fff; }
+    .card:hover { background-color: #ebf8ff; transform: translateY(-3px); border-color: #3182ce; }
+    button { background: #4a90e2; color: white; border: none; padding: 15px 30px; border-radius: 10px; cursor: pointer; font-size: 18px; font-weight: bold; }
+    input { padding: 12px; width: 80%; margin-bottom: 25px; border: 2px solid #cbd5e0; border-radius: 8px; font-size: 16px; text-align: center; }
+    .progress { height: 10px; background: #edf2f7; border-radius: 5px; margin-bottom: 30px; overflow: hidden; }
+    .progress-fill { height: 100%; background: #4a90e2; width: 0%; transition: 0.4s; }
+    h2 { color: #2b6cb0; }
+    .sigma-text { font-family: serif; font-style: italic; font-size: 1.5em; color: #2d3748; }
   </style>
 </head>
 <body>
 
 <div class="container">
-  <h2>🌍 The "Where Will You Live?" Game</h2>
+  <h2>👽 Pat the Alien's Passport</h2>
   <div id="gameArea">
-    <p>Loading...</p>
+    <p>Loading transmission from Sector 7...</p>
   </div>
 </div>
 
 <script>
-// --- YOUR SETTINGS ---
+// --- SETTINGS ---
 const backendURL = "https://script.google.com/macros/s/AKfycbwB2ThLQ0g9bCE5Dbh9hX6U_fibb-M8g4EqwvqruRXjm4C7nSS2NXmcMyhH_lc7__fS/exec";
 const cPoor = 20000;
 const cRich = 100000; 
@@ -34,7 +36,7 @@ let step = 0;
 const maxSteps = 5;
 let studentName = "";
 
-// --- LOGIC ---
+// --- MATH ENGINE ---
 function getCE(sigma) {
   if (Math.abs(sigma - 1.0) < 0.01) return Math.exp(0.5 * Math.log(cPoor) + 0.5 * Math.log(cRich));
   let uP = Math.pow(cPoor, 1 - sigma) / (1 - sigma);
@@ -44,15 +46,17 @@ function getCE(sigma) {
 
 function init() {
   document.getElementById("gameArea").innerHTML = `
-    <p>Enter your name to start:</p>
-    <input type="text" id="nameInput" placeholder="Your Name">
-    <button onclick="startGame()">Start Game</button>
+    <p>Pat the Alien needs to choose a country to live in for the next year.</p>
+    <p>Help Pat decide by entering your name or initials:</p>
+    <input type="text" id="nameInput" placeholder="Intergalactic ID">
+    <br>
+    <button onclick="startGame()">Start Calibration</button>
   `;
 }
 
 function startGame() {
   studentName = document.getElementById("nameInput").value.trim();
-  if(!studentName) return alert("Enter a name!");
+  if(!studentName) return alert("Pat needs your ID!");
   render();
 }
 
@@ -63,16 +67,16 @@ function render() {
   
   document.getElementById("gameArea").innerHTML = `
     <div class="progress"><div class="progress-fill" style="width:${(step/maxSteps)*100}%"></div></div>
-    <p>Which country would you rather be born into?</p>
+    <p><b>Decision ${step + 1} of ${maxSteps}:</b><br>Which country should Pat move to?</p>
     
     <div class="card" onclick="handle('risky')">
-      <h3>Option A: The Lottery</h3>
+      <h3>Country A: Risky</h3>
       <p>50% chance of <b>€${cRich.toLocaleString()}</b></p>
       <p>50% chance of <b>€${cPoor.toLocaleString()}</b></p>
     </div>
 
     <div class="card" onclick="handle('safe')">
-      <h3>Option B: The Sure Thing</h3>
+      <h3>Country B: Safe</h3>
       <p>100% chance of <b>€${Math.round(safeOffer).toLocaleString()}</b></p>
     </div>
   `;
@@ -88,10 +92,10 @@ function handle(choice) {
 function finish() {
   let finalSigma = (sigmaLow + sigmaHigh) / 2;
 
-  // SAVE DATA TO YOUR GOOGLE SHEET
+  // SEND DATA
   fetch(backendURL, {
     method: "POST",
-    mode: "no-cors", // Required for Google Apps Script
+    mode: "no-cors",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: studentName, sigma: finalSigma.toFixed(2) })
   });
@@ -100,26 +104,33 @@ function finish() {
   let desc = "";
   if(finalSigma < 0.5) {
     type = "The High Roller 🎲";
-    desc = "You only care about the average. You don't mind inequality at all!";
+    desc = "You only care about the average income. Inequality doesn't scare you!";
   } else if(finalSigma < 1.5) {
     type = "The Balanced Thinker ⚖️";
-    desc = "You're very standard. You like a good deal but don't want to risk everything.";
+    desc = "You're very standard. You like growth, but you want a safety net too.";
   } else if(finalSigma < 3.5) {
     type = "The Safety Seeker 🛡️";
-    desc = "You value a safety net. You'd rather have a bit less money if it means everyone is safe.";
+    desc = "You value stability. You'd give up a lot of extra cash just to stay out of poverty.";
   } else {
     type = "The Risk Hater 🏠";
-    desc = "You really dislike uncertainty. You'd take a much lower income just to be sure you aren't poor.";
+    desc = "You really dislike uncertainty. You prefer equality over almost anything else.";
   }
 
   document.getElementById("gameArea").innerHTML = `
-    <h2>All Done, ${studentName}!</h2>
-    <p>Your Risk Aversion ($\sigma$) is: <b>${finalSigma.toFixed(2)}</b></p>
-    <div style="background:#e7f3ff; padding:15px; border-radius:10px;">
-      <h3>Your Style: ${type}</h3>
+    <h2>Success, ${studentName}!</h2>
+    <p>Your risk aversion parameter is:</p>
+    <div class="sigma-text">σ = ${finalSigma.toFixed(2)}</div>
+    
+    <div style="background:#f7fafc; padding:20px; border-radius:15px; margin: 20px 0; border: 1px solid #e2e8f0;">
+      <h3>Style: ${type}</h3>
       <p>${desc}</p>
     </div>
-    <p><small>Your data has been sent to the class spreadsheet.</small></p>
+
+    <p style="font-size: 0.9em; color: #4a5568;">
+      <i><b>Jones & Klenow Insight:</b> This &sigma; determines how much we penalize a country's GDP for having high inequality. The higher your &sigma;, the more "welfare" is lost when wealth isn't shared.</i>
+    </p>
+    
+    <button onclick="location.reload()">Play Again</button>
   `;
 }
 
