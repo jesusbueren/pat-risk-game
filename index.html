@@ -1,16 +1,16 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Pat the Alien Risk Game</title>
+  <title>Pat the Alien – Risk Game</title>
 </head>
 <body>
 
-<h2>Pat the Alien – Estimate Your Risk Aversion</h2>
+<h2>Pat the Alien – Choose Your Country for the Year!</h2>
 
 <div id="game"></div>
 
 <script>
-const backendURL = "https://script.google.com/macros/s/AKfycbyZaMaPolnhTyt5xLKyNybqurfchxlje5xoQEye1vXMM3BIZpw1zj98NwDUpLJPBpuc/exec";
+const backendURL = "YOUR_WEB_APP_URL_HERE";  // Replace with your Apps Script URL
 const id = Math.random().toString(36).substring(2, 10);
 let studentName = "";
 
@@ -19,10 +19,9 @@ let sigmaHigh = 20;
 let sigmaEstimate = null;
 let questionNumber = 0;
 
+// Questions array for bisection (first question hardcoded)
 const questions = [
-  // Question 1: identify risk averse or not
-  {safe: [10, 10], risky: [20, 0], p: 0.5},
-  // Following questions use bisection
+  {safe: [40000, 40000], risky: [60000, 20000], p: 0.5}, 
   {safe: null, risky: null, p: 0.5}, 
   {safe: null, risky: null, p: 0.5}, 
   {safe: null, risky: null, p: 0.5}, 
@@ -31,7 +30,9 @@ const questions = [
 
 function askName() {
   document.getElementById("game").innerHTML = `
-    <p>Enter your name or initials:</p>
+    <p>Welcome! Pat the Alien must choose a country to live in for the next year.</p>
+    <p>Some countries are safer, some are risky. Your choices will reveal how much you dislike uncertainty!</p>
+    <p>Enter your name or initials to start:</p>
     <input type="text" id="nameInput"/>
     <br><br>
     <button onclick="saveName()">Start</button>
@@ -49,30 +50,35 @@ function nextQuestion() {
   questionNumber++;
   if(questionNumber > questions.length || sigmaEstimate !== null) {
     recordSigma();
-    document.getElementById("game").innerHTML = `<h3>Thanks! Your estimated σ = ${sigmaEstimate.toFixed(2)}</h3>`;
+    document.getElementById("game").innerHTML = `
+      <h3>Thanks for playing, ${studentName}!</h3>
+      <p>Your estimated risk aversion σ = ${sigmaEstimate.toFixed(2)}</p>
+      <p>Check the spreadsheet to see the class distribution later!</p>
+    `;
     return;
   }
 
-  // For question 1
-  let q = questions[questionNumber-1];
+  const q = questions[questionNumber-1];
+
   if(questionNumber === 1){
+    // First fun choice: identify risk-neutral vs risk-averse
     document.getElementById("game").innerHTML = `
-      <p><b>Question 1:</b> Choose the country you prefer</p>
-      <p>Country A: 50% chance 10, 50% chance 10 (Safe)</p>
-      <p>Country B: 50% chance 20, 50% chance 0 (Risky)</p>
-      <button onclick="choose('A')">Country A</button>
-      <button onclick="choose('B')">Country B</button>
+      <p><b>Question 1:</b> Choose the country you prefer to live in for the year:</p>
+      <p>Country A: Safe → earn €40,000 for sure</p>
+      <p>Country B: Risky → 50% chance earn €60,000, 50% chance earn €20,000</p>
+      <button onclick="choose('A')">Country A (Safe)</button>
+      <button onclick="choose('B')">Country B (Risky)</button>
     `;
   } else {
-    // Use bisection: compute midpoint of interval
+    // Bisection for later questions
     const mid = (sigmaLow + sigmaHigh)/2;
-    // safe and risky options: safe = mid points
-    q.safe = [10 + mid/2, 10 - mid/2];
-    q.risky = [10 + mid, 10 - mid];
+    q.safe = [40000 + mid*500, 40000 - mid*500];  // scaling to make numbers reasonable
+    q.risky = [40000 + mid*1000, 40000 - mid*1000];
+
     document.getElementById("game").innerHTML = `
-      <p><b>Question ${questionNumber}:</b> Choose the country you prefer</p>
-      <p>Country A: 50% chance ${q.safe[0]}, 50% chance ${q.safe[1]} (Safe)</p>
-      <p>Country B: 50% chance ${q.risky[0]}, 50% chance ${q.risky[1]} (Risky)</p>
+      <p><b>Question ${questionNumber}:</b> Choose the country you prefer to live in for the year:</p>
+      <p>Country A: 50% chance €${q.safe[0].toLocaleString()}, 50% chance €${q.safe[1].toLocaleString()} (Safer)</p>
+      <p>Country B: 50% chance €${q.risky[0].toLocaleString()}, 50% chance €${q.risky[1].toLocaleString()} (Riskier)</p>
       <button onclick="choose('A')">Country A</button>
       <button onclick="choose('B')">Country B</button>
     `;
@@ -87,12 +93,10 @@ function choose(option) {
       sigmaLow = 0; sigmaHigh = 20; // Continue bisection
     }
   } else {
-    // Bisection update
     const mid = (sigmaLow + sigmaHigh)/2;
-    if(option === 'A') sigmaLow = mid; // prefers safe → more risk averse
-    else sigmaHigh = mid; // prefers risky → less risk averse
+    if(option === 'A') sigmaLow = mid;  // prefers safe → more risk averse
+    else sigmaHigh = mid;  // prefers risky → less risk averse
 
-    // Stop if interval small enough or last question
     if(questionNumber === questions.length) sigmaEstimate = (sigmaLow + sigmaHigh)/2;
   }
 
@@ -112,7 +116,7 @@ function recordSigma() {
 
 // Start
 askName();
-
 </script>
+
 </body>
 </html>
