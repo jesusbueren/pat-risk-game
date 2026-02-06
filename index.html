@@ -12,7 +12,6 @@
 <body>
 
 <h2>Pat the Alien – Risk Game</h2>
-<p>You will play two short games. Outcomes are random.</p>
 
 <div id="game"></div>
 
@@ -20,11 +19,31 @@
 const backendURL = "PASTE_YOUR_WEB_APP_URL_HERE";
 const id = Math.random().toString(36).substring(2, 10);
 let gameNumber = 1;
+let studentName = "";
 
 const games = [
   { name: "Game 1 (Low Risk)", p: 0.10 },
   { name: "Game 2 (High Risk)", p: 0.30 }
 ];
+
+function askName() {
+  document.getElementById("game").innerHTML = `
+    <p>Enter your name (or initials):</p>
+    <input type="text" id="nameInput" />
+    <br><br>
+    <button onclick="saveName()">Start</button>
+  `;
+}
+
+function saveName() {
+  const input = document.getElementById("nameInput").value.trim();
+  if (input === "") {
+    alert("Please enter a name or initials.");
+    return;
+  }
+  studentName = input;
+  showGame();
+}
 
 function showGame() {
   if (gameNumber > games.length) {
@@ -54,6 +73,7 @@ function play(choice) {
   fetch(backendURL, {
     method: "POST",
     body: JSON.stringify({
+      name: studentName,
       id: id,
       game: gameNumber,
       choice: choice,
@@ -71,8 +91,9 @@ function next() {
   showGame();
 }
 
-showGame();
+askName();
 </script>
 
 </body>
+
 </html>
