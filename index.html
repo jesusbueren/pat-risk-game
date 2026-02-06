@@ -1,41 +1,73 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Pat the Alien – Risk Game</title>
+  <title>Pat the Alien – The Veil of Ignorance</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; line-height: 1.6; }
+    button { padding: 10px 20px; font-size: 16px; margin: 10px 5px; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 5px; }
+    button:hover { background-color: #0056b3; }
+    .choice-box { border: 1px solid #ccc; padding: 15px; margin: 15px 0; border-radius: 8px; background-color: #f9f9f9; }
+    input { padding: 8px; font-size: 16px; }
+  </style>
 </head>
 <body>
 
-<h2>Pat the Alien – Choose Your Country for the Year!</h2>
+<h2>👽 Pat the Alien: Where will you live?</h2>
 
 <div id="game"></div>
 
 <script>
-const backendURL = "https://script.google.com/macros/s/AKfycbyZaMaPolnhTyt5xLKyNybqurfchxlje5xoQEye1vXMM3BIZpw1zj98NwDUpLJPBpuc/exec";  // Replace with your Apps Script URL
-const id = Math.random().toString(36).substring(2, 10);
+// --- CONFIGURATION ---
+// Replace with your Google Apps Script URL if you want to save data
+const backendURL = "https://script.google.com/macros/s/AKfycbyZaMaPolnhTyt5xLKyNybqurfchxlje5xoQEye1vXMM3BIZpw1zj98NwDUpLJPBpuc/exec"; 
+
+// The "US" Lottery (Risky Country)
+// 50% chance of being Poor, 50% chance of being Rich
+const cPoor = 20000;
+const cRich = 100000; 
+
+// Bisection State
+let sigmaLow = 0.0;
+let sigmaHigh = 10.0; // Max reasonable sigma for the game
+let step = 0;
+const maxSteps = 5;
 let studentName = "";
+let history = [];
 
-let sigmaLow = 0;
-let sigmaHigh = 20;
-let sigmaEstimate = null;
-let questionNumber = 0;
-
-// Questions array for bisection (first question hardcoded)
-const questions = [
-  {safe: [40000, 40000], risky: [60000, 20000], p: 0.5}, 
-  {safe: null, risky: null, p: 0.5}, 
-  {safe: null, risky: null, p: 0.5}, 
-  {safe: null, risky: null, p: 0.5}, 
-  {safe: null, risky: null, p: 0.5} 
-];
+// --- UTILITY FUNCTIONS (Jones & Klenow) ---
+function getCertaintyEquivalent(sigma) {
+  // If sigma is very close to 1, use Log utility
+  if (Math.abs(sigma - 1.0) < 0.01) {
+    // ln(CE) = 0.5*ln(cPoor) + 0.5*ln(cRich)
+    const logCE = 0.5 * Math.log(cPoor) + 0.5 * Math.log(cRich);
+    return Math.exp(logCE);
+  } else {
+    // CRRA: u(c) = c^(1-sigma) / (1-sigma)
+    // CE = [ (0.5*cPoor^(1-s) + 0.5*cRich^(1-s)) * (1-s) / (1-s) ] ^ (1/(1-s))
+    // Note: The (1-s) in denominator cancels out during expectation algebra for CE,
+    // but we must be careful with the power.
+    // Expected Utility = 0.5 * (cPoor^(1-sigma)/(1-sigma)) + 0.5 * (cRich^(1-sigma)/(1-sigma))
+    // U(CE) = Expected Utility
+    // CE^(1-sigma)/(1-sigma) = Expected Utility
+    // CE = [ Expected Utility * (1-sigma) ] ^ (1/(1-sigma))
+    
+    const uPoor = Math.pow(cPoor, 1 - sigma) / (1 - sigma);
+    const uRich = Math.pow(cRich, 1 - sigma) / (1 - sigma);
+    const expUtil = 0.5 * uPoor + 0.5 * uRich;
+    return Math.pow(expUtil * (1 - sigma), 1 / (1 - sigma));
+  }
+}
 
 function askName() {
   document.getElementById("game").innerHTML = `
-    <p>Welcome! Pat the Alien must choose a country to live in for the next year.</p>
-    <p>Some countries are safer, some are risky. Your choices will reveal how much you dislike uncertainty!</p>
-    <p>Enter your name or initials to start:</p>
-    <input type="text" id="nameInput"/>
+    <p>You must be born into one of two countries.</p>
+    <p><b>Country A (Risky):</b> High inequality. You might be rich, you might be poor.</p>
+    <p><b>Country B (Safe):</b> Perfect equality. Everyone gets the same income.</p>
+    <p>We will test how much "Safe Income" you are willing to accept to avoid the risk.</p>
+    <label>Enter your Name/ID:</label><br>
+    <input type="text" id="nameInput" placeholder="Pat the Alien"/>
     <br><br>
-    <button onclick="saveName()">Start</button>
+    <button onclick="saveName()">Start Simulation</button>
   `;
 }
 
@@ -43,75 +75,113 @@ function saveName() {
   const input = document.getElementById("nameInput").value.trim();
   if(input === "") { alert("Please enter a name"); return; }
   studentName = input;
-  nextQuestion();
+  renderQuestion();
 }
 
-function nextQuestion() {
-  questionNumber++;
-  if(questionNumber > questions.length || sigmaEstimate !== null) {
-    recordSigma();
-    document.getElementById("game").innerHTML = `
-      <h3>Thanks for playing, ${studentName}!</h3>
-      <p>Your estimated risk aversion σ = ${sigmaEstimate.toFixed(2)}</p>
-      <p>Check the spreadsheet to see the class distribution later!</p>
-    `;
+function renderQuestion() {
+  if (step >= maxSteps) {
+    finishGame();
     return;
   }
 
-  const q = questions[questionNumber-1];
+  // Calculate the midpoint sigma to test
+  const currentSigma = (sigmaLow + sigmaHigh) / 2;
+  
+  // Calculate the "Safe Income" that makes a person with currentSigma indifferent
+  const safeIncome = getCertaintyEquivalent(currentSigma);
 
-  if(questionNumber === 1){
-    // First fun choice: identify risk-neutral vs risk-averse
-    document.getElementById("game").innerHTML = `
-      <p><b>Question 1:</b> Choose the country you prefer to live in for the year:</p>
-      <p>Country A: Safe → earn €40,000 for sure</p>
-      <p>Country B: Risky → 50% chance earn €60,000, 50% chance earn €20,000</p>
-      <button onclick="choose('A')">Country A (Safe)</button>
-      <button onclick="choose('B')">Country B (Risky)</button>
-    `;
-  } else {
-    // Bisection for later questions
-    const mid = (sigmaLow + sigmaHigh)/2;
-    q.safe = [40000 + mid*500, 40000 - mid*500];  // scaling to make numbers reasonable
-    q.risky = [40000 + mid*1000, 40000 - mid*1000];
+  document.getElementById("game").innerHTML = `
+    <p><b>Decision #${step + 1} of ${maxSteps}</b></p>
+    
+    <div class="choice-box">
+      <h3>🇺🇸 The Risky Country</h3>
+      <p>50% chance: <b>€${cPoor.toLocaleString()}</b></p>
+      <p>50% chance: <b>€${cRich.toLocaleString()}</b></p>
+      <p><i>(Avg Income: €${((cPoor+cRich)/2).toLocaleString()})</i></p>
+    </div>
 
-    document.getElementById("game").innerHTML = `
-      <p><b>Question ${questionNumber}:</b> Choose the country you prefer to live in for the year:</p>
-      <p>Country A: 50% chance €${q.safe[0].toLocaleString()}, 50% chance €${q.safe[1].toLocaleString()} (Safer)</p>
-      <p>Country B: 50% chance €${q.risky[0].toLocaleString()}, 50% chance €${q.risky[1].toLocaleString()} (Riskier)</p>
-      <button onclick="choose('A')">Country A</button>
-      <button onclick="choose('B')">Country B</button>
-    `;
-  }
+    <div style="text-align:center; font-weight:bold;">OR</div>
+
+    <div class="choice-box">
+      <h3>🇵🇹 The Safe Country</h3>
+      <p>100% chance: <b>€${Math.round(safeIncome).toLocaleString()}</b></p>
+      <p><i>(Guaranteed)</i></p>
+    </div>
+
+    <p>Which do you choose?</p>
+    <button onclick="handleChoice('risky')">Choose Risky</button>
+    <button onclick="handleChoice('safe')">Choose Safe</button>
+  `;
 }
 
-function choose(option) {
-  if(questionNumber === 1){
-    if(option === 'B'){
-      sigmaEstimate = 0; // Not risk averse
-    } else {
-      sigmaLow = 0; sigmaHigh = 20; // Continue bisection
-    }
-  } else {
-    const mid = (sigmaLow + sigmaHigh)/2;
-    if(option === 'A') sigmaLow = mid;  // prefers safe → more risk averse
-    else sigmaHigh = mid;  // prefers risky → less risk averse
+function handleChoice(choice) {
+  // If user picks SAFE:
+  // It means the offered Safe Income > Their internal Valuation of the gamble.
+  // The offered Safe Income was low (calculated based on high sigma).
+  // If they take it, they really hate risk.
+  // Wait... let's trace:
+  // Sigma=0 (Neutral) -> CE = 60k.
+  // Sigma=5 (Averse)  -> CE = 25k.
+  //
+  // Algorithm proposes Sigma=2.5. CE is approx 30k.
+  // Offer: Risky vs Safe 30k.
+  //
+  // User is Risk Neutral (Sigma=0). Value of Risky is 60k.
+  // 60k > 30k. User picks RISKY.
+  // Conclusion: User is LESS risk averse than 2.5. (Correct)
+  // Action: sigmaHigh = currentSigma.
+  //
+  // User is Very Risk Averse (Sigma=5). Value of Risky is 25k.
+  // 30k > 25k. User picks SAFE.
+  // Conclusion: User is MORE risk averse than 2.5. (Correct)
+  // Action: sigmaLow = currentSigma.
 
-    if(questionNumber === questions.length) sigmaEstimate = (sigmaLow + sigmaHigh)/2;
-  }
+  const currentSigma = (sigmaLow + sigmaHigh) / 2;
+  const safeOffered = getCertaintyEquivalent(currentSigma);
 
-  nextQuestion();
-}
-
-function recordSigma() {
-  fetch(backendURL, {
-    method: "POST",
-    body: JSON.stringify({
-      name: studentName,
-      id: id,
-      sigma: sigmaEstimate
-    })
+  history.push({
+    step: step + 1,
+    offer: Math.round(safeOffered),
+    choice: choice
   });
+
+  if (choice === 'safe') {
+    // User accepted the safe amount. They are at least this risk averse.
+    sigmaLow = currentSigma; 
+  } else {
+    // User rejected the safe amount. They want more cash to switch. They are less risk averse.
+    sigmaHigh = currentSigma;
+  }
+
+  step++;
+  renderQuestion();
+}
+
+function finishGame() {
+  const finalSigma = (sigmaLow + sigmaHigh) / 2;
+  
+  // Optional: Send to backend
+  if(backendURL) {
+    fetch(backendURL, {
+      method: "POST",
+      body: JSON.stringify({ name: studentName, sigma: finalSigma })
+    }).catch(e => console.log("Backend error", e));
+  }
+
+  let interpretation = "";
+  if(finalSigma < 0.5) interpretation = "Risk Neutral (You care mostly about averages)";
+  else if(finalSigma < 2) interpretation = "Moderate Risk Aversion (Typical economist)";
+  else if(finalSigma < 4) interpretation = "High Risk Aversion";
+  else interpretation = "Extreme Risk Aversion (Rawlsian)";
+
+  document.getElementById("game").innerHTML = `
+    <h3>Result for ${studentName}</h3>
+    <p style="font-size: 24px;">Your estimated &sigma; = <b>${finalSigma.toFixed(2)}</b></p>
+    <p><b>What this means:</b> ${interpretation}</p>
+    <p><i>In the Jones & Klenow model, this parameter determines how much we should penalize a country's GDP for having high inequality.</i></p>
+    <hr>
+    <button onclick="location.reload()">Start Over</button>
+  `;
 }
 
 // Start
