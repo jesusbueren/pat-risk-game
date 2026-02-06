@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Pat the Alien – Risk Game</title>
+  <style>
+    body { font-family: Arial; text-align: center; margin-top: 40px; }
+    button { padding: 15px; margin: 10px; font-size: 16px; }
+  </style>
+</head>
+
+<body>
+
+<h2>Pat the Alien – Risk Game</h2>
+<p>You will play two short games. Outcomes are random.</p>
+
+<div id="game"></div>
+
+<script>
+const backendURL = "PASTE_YOUR_WEB_APP_URL_HERE";
+const id = Math.random().toString(36).substring(2, 10);
+let gameNumber = 1;
+
+const games = [
+  { name: "Game 1 (Low Risk)", p: 0.10 },
+  { name: "Game 2 (High Risk)", p: 0.30 }
+];
+
+function showGame() {
+  if (gameNumber > games.length) {
+    document.getElementById("game").innerHTML =
+      "<h3>Thanks! You are done.</h3>";
+    return;
+  }
+
+  const g = games[gameNumber - 1];
+
+  document.getElementById("game").innerHTML = `
+    <h3>${g.name}</h3>
+    <p>Risky option: ${g.p*100}% chance of presentation</p>
+    <button onclick="play('Safe')">Safe Country</button>
+    <button onclick="play('Risky')">Risky Country</button>
+  `;
+}
+
+function play(choice) {
+  const g = games[gameNumber - 1];
+  let outcome = "Safe";
+
+  if (choice === "Risky" && Math.random() < g.p) {
+    outcome = "Presentation";
+  }
+
+  fetch(backendURL, {
+    method: "POST",
+    body: JSON.stringify({
+      id: id,
+      game: gameNumber,
+      choice: choice,
+      outcome: outcome
+    })
+  });
+
+  document.getElementById("game").innerHTML =
+    `<p><b>Outcome:</b> ${outcome}</p>
+     <button onclick="next()">Next</button>`;
+}
+
+function next() {
+  gameNumber++;
+  showGame();
+}
+
+showGame();
+</script>
+
+</body>
+</html>
